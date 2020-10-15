@@ -1,0 +1,23 @@
+---
+# handlers file for aerospikes
+- name : start_aerospikes
+  systemd:
+    name: aerospike
+    state: restarted
+    daemon_reload: yes
+
+
+- name: Make Sure Cluster Memembership Is Correct
+  command: asinfo --no-config-file
+  register: asinfo_output
+  until: asinfo_output.stdout.find("cluster_size={{ aerospike_cluster_size }}") != -1
+  retries: 50
+  delay: 5
+  ignore_errors: true
+  listen: start_aerospikes
+
+- name: start_amc
+  systemd:
+    name : amc
+    state: restarted
+    daemon_reload: yes

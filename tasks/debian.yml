@@ -1,0 +1,81 @@
+---
+# creating  a directory where  archive file will be downloaded
+- name: Create Aerospike download directory
+  file:
+    path: "{{aerospike_source_directory}}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+# creating aerospikes log directory
+- name: Create Aerospike log directory.
+  file:
+    path: "{{ aerospike_log_directory }}"
+    state: directory
+
+# Download the Aerospikes according to the Family and version
+- name: Downloading Aerospike package for Debian Family
+  unarchive:
+    src: https://www.aerospike.com/download/server/{{ aerospike_version }}/artifact/{{ Debian_version }}
+    dest: "{{aerospike_source_directory}}"
+    remote_src: true
+    list_files: yes
+    validate_certs: no
+  register: archive_contents
+
+- name: Updating the deb repo with Aerospikes Packages.
+  find:
+    paths: "{{aerospike_source_directory}}/{{ archive_contents.files[0].split('/')[0] }}"
+    patterns: "^(aerospike-(?:server|tools).+\\.deb)$"
+    use_regex: true
+  register: aerospike_debs
+
+- name: dependencies
+  apt:
+    name: ['python3' , 'python-dev', 'libssl-dev', 'gcc']
+    state: present
+
+# it will installed the Aerospikes in Debian Family
+- name: Install Aerospike package and its dependencies
+  apt:
+    deb:
+     - "{{ item.path }}"
+    state: present
+    update_cache: yes
+    install_recommends: yes
+  with_items:
+    - "{{ aerospike_debs.files }}"
+
+# it will place the config file in the default directory
+- name: Place Aerospike configuration file.
+  template:
+    src: aerospike.conf.j2
+    dest: "{{ aerospike_config_destination }}"
+    owner: root
+    group: root
+    force: yes
+  notify:
+    - start_aerospikes
+    - Make Sure Cluster Memembership Is Correct
+
+# installing aerospikes Management Console
+- name: Installing Aerospikes webconsole
+  get_url:
+    url: "http://www.aerospike.com/download/amc/{{ amc_version }}/artifact/ubuntu12"
+    dest: "{{aerospike_source_directory}}"
+  register: amc_file
+
+# updating and setting up the amc
+- name: Updating the repo with amc
+  apt:
+    name: “{{ item }}”
+    state: latest
+  with_items:
+    - "{{ amc_file.files }}"
+    - gcc
+    - python-devel
+  notify:
+    - start_amc
+
+
+
